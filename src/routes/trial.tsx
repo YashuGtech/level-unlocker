@@ -14,13 +14,19 @@
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { motion } from "framer-motion";
-import { Lock, Play, ArrowLeft, ShieldCheck, Trophy, MessageCircle } from "lucide-react";
+import { Lock, Play, ArrowLeft, ShieldCheck, Trophy, MessageCircle, Loader2 } from "lucide-react";
 import { Flappy } from "@/components/flappy";
+import type { Level } from "@/components/flappy";
+import type { LevelObject } from "@/lib/game.functions";
 import { buildTrialLevel } from "@/lib/trial-level";
 import { describeLevel } from "@/lib/level-obstacles";
 import { useSession } from "@/lib/session";
 import { GoldFrame } from "@/components/gold-ui";
+import { getPublicLevelByIndex } from "@/lib/levels.functions";
+
 
 const TRIAL_PASSWORD = "7207";
 const STORAGE_KEY = "gtech_trial_unlocked";
