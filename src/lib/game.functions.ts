@@ -471,10 +471,14 @@ export const finishGame = createServerFn({ method: "POST" })
       latest?.current_level ?? (user as unknown as { current_level?: number }).current_level ?? 1,
     );
     const milestone = oldLevel === 50 || oldLevel === 100 ? MILESTONE_BONUS : 0;
-    // Prize = base level prize + (coins collected + auto level bonus coins) × coin value + milestone.
+    // Prize = FIXED level prize (defined in this file) + (coins collected +
+    // auto level bonus coins) × coin value + milestone bonus.
+    // The flat per-level reward is locked to LEVEL_FLAT_REWARD_DEFAULT so a
+    // successful 60-second run always pays out the same guaranteed amount,
+    // regardless of admin settings drift.
     const totalCoins = data.coinsCollected + settings.levelCoinBonus;
     const coinsValueGtc = totalCoins * settings.coinValueGtc;
-    const basePrize = settings.levelWinPrizeGtc || LEVEL_FLAT_REWARD_DEFAULT;
+    const basePrize = LEVEL_FLAT_REWARD_DEFAULT;
     const credited = basePrize + coinsValueGtc + milestone;
     const newBal = Number(latest?.balance_gtc ?? 0) + credited;
     const newLevel = Math.min(settings.cap, oldLevel + 1);
