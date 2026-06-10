@@ -1202,14 +1202,13 @@ export function Flappy({ level, objects, levelIndex = 1, devMode = false, editor
       ctx.fillStyle = "rgba(0,0,0,0.35)";
       ctx.fillRect(0, 0, W, 38);
 
+      // Fixed 60-second run — end the game once the timer reaches the level
+      // duration. We intentionally ignore `repeat_loop` on the client: the
+      // server already tiles short maps across the full duration window, so
+      // looping here would prevent the player from ever completing the level
+      // (and from receiving the fixed level prize).
       if (runTime >= level.duration_seconds) {
-        if (level.repeat_loop) {
-          runTime = 0;
-          nextIdx = 0;
-          active = [];
-        } else {
-          return stop(true);
-        }
+        return stop(true);
       }
 
       raf = requestAnimationFrame(tick);
