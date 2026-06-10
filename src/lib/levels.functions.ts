@@ -341,4 +341,64 @@ export const devListLevels = createServerFn({ method: "POST" })
       }));
   });
 
+// ─── Public read for /trial and other browser previews (no auth) ─────
+const PublicGetInput = z.object({
+  level_index: z.number().int().min(1).max(1000),
+});
+
+/**
+ * Fetch a dev-built level + its placed objects by player-facing index.
+ * Returns `null` when no level has been built yet for that index, so the
+ * caller can fall back to its built-in preview map.
+ */
+export const getPublicLevelByIndex = createServerFn({ method: "POST" })
+  .inputValidator((input) => PublicGetInput.parse(input))
+  .handler(async ({ data }) => {
+    type LvRow = {
+      id: string; name: string; duration_seconds: number;
+      gravity: number | string; jump_strength: number | string;
+      scroll_speed: number | string; pipe_gap: number;
+      enabled: boolean; repeat_loop: boolean;
+      reward_per_coin: number | string; bg_color: string | null;
+    };
+    const lvRes = await (supabaseAdmin.from("levels") as unknown as {
+      select: (s: string) => {
+        eq: (c: string, v: unknown) => {
+          maybeSingle: () => Promise<{ data: LvRow | null }>;
+        };
+      };
+    })
+      .select("id,name,duration_seconds,gravity,jump_strength,scroll_speed,pipe_gap,enabled,repeat_loop,reward_per_coin,bg_color")
+      .eq("level_index", data.level_index)
+      .maybeSingle();
+    const lv = lvRes.data;
+    if (!lv || !lv.enabled) return { level: null, objects: [] as Array<{ id: string; obj_type: string; x_time: number; y: number; props: Record<string, string | number | boolean> }> };
+    const { data: objs } = await supabaseAdmin
+      .from("level_objects")
+      .select("*")
+      .eq("level_id", lv.id)
+      .order("x_time");
+    return {
+      level: {
+        id: lv.id,
+        name: lv.name,
+        duration_seconds: lv.duration_seconds,
+        gravity: Number(lv.gravity),
+        jump_strength: Number(lv.jump_strength),
+        scroll_speed: Number(lv.scroll_speed),
+        pipe_gap: lv.pipe_gap,
+        repeat_loop: lv.repeat_loop,
+        reward_per_coin: Number(lv.reward_per_coin),
+        bg_color: lv.bg_color ?? "#0a0a0a",
+      },
+      objects: (objs ?? []).map((o) => ({
+        id: o.id as string,
+        obj_type: o.obj_type as string,
+        x_time: Number(o.x_time),
+        y: Number(o.y),
+        props: (o.props ?? {}) as Record<string, string | number | boolean>,
+      })),
+    };
+  });
+
 
