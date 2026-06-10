@@ -682,6 +682,12 @@ function TimelineCanvas({
               aria-label={`Remove ${meta.label} at ${o.x_time}s`}
               title={`${meta.label} · ${o.x_time}s — click to remove`}
             >
+              {/* Bounding-box outline so devs can place obstacles right next to
+                  each other without overlap. Sized to the obstacle preview. */}
+              <span
+                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[3px] border border-dashed border-gold-soft/70 ring-1 ring-black/40 group-hover:border-gold group-hover:border-solid"
+                style={{ width: meta.width + 4, height: meta.height + 4 }}
+              />
               <ObstaclePreview type={o.obj_type} />
               <span className="pointer-events-none absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] uppercase tracking-widest text-gold-soft/65 opacity-0 transition-opacity group-hover:opacity-100">
                 {o.x_time}s
