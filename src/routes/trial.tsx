@@ -199,25 +199,91 @@ function LevelPicker({ onPick }: { onPick: (n: number) => void }) {
 }
 
 function TrialPlay({ levelIndex, onExit }: { levelIndex: number; onExit: () => void }) {
-  const built = useMemo(() => buildTrialLevel(levelIndex), [levelIndex]);
+  const fallback = useMemo(() => buildTrialLevel(levelIndex), [levelIndex]);
   const [runKey, setRunKey] = useState(0);
+  const fetchPublic = useServerFn(getPublicLevelByIndex);
+
+  // Always try to load the dev-built level from Supabase first so trial
+  // players see the SAME obstacle placements as real players. Falls back
+  // to the auto-generated trial map only when no dev level exists yet.
+  const { data, isLoading } = useQuery({
+    queryKey: ["trial-level", levelIndex, runKey],
+    queryFn: () => fetchPublic({ data: { level_index: levelIndex } }),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
+  });
+
+  const { level, objects, source } = useMemo(() => {
+    if (data?.level && data.objects.length > 0) {
+      const dev = data.level;
+      const duration = dev.duration_seconds || 60;
+      const base: LevelObject[] = data.objects.map((o, i) => ({
+        id: `dev_${dev.id}_${i}`,
+        obj_type: o.obj_type as LevelObject["obj_type"],
+        x_time: o.x_time,
+        y: o.y,
+        props: o.props,
+      }));
+      // Mirror the real-player loop tiling from game.functions.ts so a
+      // short dev map fills the 60s window for trial too.
+      const last = base.reduce((m, o) => Math.max(m, o.x_time), 0);
+      let objs = base;
+      if (dev.repeat_loop && last > 0 && last < duration) {
+        const period = last + 1.5;
+        const looped: LevelObject[] = [];
+        let offset = 0;
+        let safety = 0;
+        while (offset < duration && safety++ < 200) {
+          base.forEach((o, i) => {
+            const t = o.x_time + offset;
+            if (t <= duration) looped.push({ ...o, id: `dev_${dev.id}_l${safety}_${i}`, x_time: t });
+          });
+          offset += period;
+        }
+        objs = looped;
+      }
+      const lvl: Level = {
+        id: dev.id,
+        name: dev.name,
+        duration_seconds: duration,
+        gravity: dev.gravity,
+        jump_strength: dev.jump_strength,
+        scroll_speed: dev.scroll_speed,
+        pipe_gap: dev.pipe_gap,
+        bg_color: dev.bg_color,
+        bg_kind: "night_city",
+        repeat_loop: dev.repeat_loop,
+        reward_per_coin: dev.reward_per_coin,
+      };
+      return { level: lvl, objects: objs, source: "dev" as const };
+    }
+    return { level: fallback.level, objects: fallback.objects, source: "fallback" as const };
+  }, [data, fallback]);
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black text-gold-soft">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading dev level…
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black">
       <Flappy
-        key={`${levelIndex}-${runKey}`}
-        level={built.level}
-        objects={built.objects}
+        key={`${levelIndex}-${runKey}-${source}`}
+        level={level}
+        objects={objects}
         levelIndex={levelIndex}
         devMode
         onEnd={() => {
-          // Trial run ended (timer up) — bounce back to picker.
           setTimeout(onExit, 200);
         }}
       />
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-12">
         <span className="rounded-full border border-gold-soft/50 bg-black/70 px-3 py-1 text-[10px] uppercase tracking-widest text-gold-soft">
-          Trial · Lv {levelIndex} · Invincible
+          Trial · Lv {levelIndex} · {source === "dev" ? "Dev Map" : "Preview"} · Invincible
         </span>
       </div>
       <button
@@ -235,3 +301,4 @@ function TrialPlay({ levelIndex, onExit }: { levelIndex: number; onExit: () => v
     </div>
   );
 }
+
