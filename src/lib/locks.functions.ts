@@ -83,6 +83,37 @@ export const adminLockUser = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const AdminLockManyInput = z.object({
+  initData: z.string().min(1).max(16384),
+  userIds: z.array(z.number().int()).min(1).max(5000),
+  message: z.string().min(1).max(800),
+  url: z.string().url().max(800),
+});
+
+/** Lock a hand-picked group of users with the same notice. */
+export const adminLockUsers = createServerFn({ method: "POST" })
+  .inputValidator((input) => AdminLockManyInput.parse(input))
+  .handler(async ({ data }) => {
+    const { user: adminUser } = await requireAdmin(data.initData);
+    const now = new Date().toISOString();
+    const rows = data.userIds.map((uid) => ({
+      key: lockKey(uid),
+      value: { message: data.message, url: data.url, created_at: now, dismissed_at: null } as never,
+    }));
+    // Upsert in chunks to stay safely within request size limits.
+    const CHUNK = 200;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      await supabaseAdmin
+        .from("settings")
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: "key" });
+    }
+    await logAdminAction(adminUser.telegram_id, "lock_users_bulk", null, {
+      count: data.userIds.length,
+      url: data.url,
+    });
+    return { ok: true, count: data.userIds.length };
+  });
+
 const AdminUnlockInput = z.object({
   initData: z.string().min(1).max(16384),
   userId: z.number().int(),
