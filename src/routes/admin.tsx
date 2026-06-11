@@ -957,13 +957,38 @@ function BroadcastLockCard() {
   });
   const [message, setMessage] = useState("");
   const [url, setUrl] = useState("");
+  const [target, setTarget] = useState<"all" | "selected">("all");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState<Map<number, string>>(new Map());
 
-  const postMut = useMutation({
+  const userQ = useQuery({
+    queryKey: ["admin-lock-userlist", search],
+    queryFn: () => listUsers({ data: { initData: initData!, search: search || undefined } }),
+    enabled: !!initData && target === "selected" && pickerOpen,
+  });
+
+  const postAllMut = useMutation({
     mutationFn: () => adminBroadcastLock({ data: { initData: initData!, message: message.trim(), url: url.trim() } }),
     onSuccess: () => {
       toast.success("Lock posted to all users");
       setMessage(""); setUrl("");
       qc.invalidateQueries({ queryKey: ["admin-broadcast-lock"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const postSelectedMut = useMutation({
+    mutationFn: () => adminLockUsers({
+      data: {
+        initData: initData!,
+        userIds: Array.from(picked.keys()),
+        message: message.trim(),
+        url: url.trim(),
+      },
+    }),
+    onSuccess: (r) => {
+      toast.success(`Lock posted to ${r.count} user${r.count === 1 ? "" : "s"}`);
+      setMessage(""); setUrl(""); setPicked(new Map()); setPickerOpen(false);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -977,20 +1002,32 @@ function BroadcastLockCard() {
 
   const active = stats.data?.active ?? null;
   const verifiedCount = stats.data?.verifiedCount ?? 0;
+  const togglePick = (uid: number, label: string) =>
+    setPicked((prev) => {
+      const next = new Map(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.set(uid, label);
+      return next;
+    });
+
+  const canPost =
+    !!message.trim() && !!url.trim() &&
+    (target === "all" ? !postAllMut.isPending : picked.size > 0 && !postSelectedMut.isPending);
 
   return (
     <GoldFrame className="space-y-3 p-4">
       <h3 className="font-display text-sm uppercase tracking-widest text-gold-soft">
-        Broadcast Lock — All Users
+        Post Lock — Choose Audience
       </h3>
       <p className="text-[11px] text-muted-foreground">
-        Posts a one-time lock to every user. They cannot use the app until they click your URL.
-        After clicking it is dismissed for that user and never shown again.
+        Locked users see the Action Required screen on every page until they click your link.
+        Broadcast (all) is dismissed once per user after click. Selected-user locks must be
+        removed manually from the Users tab anytime.
       </p>
 
-      {active ? (
+      {active && (
         <div className="space-y-2 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-          <p className="font-semibold text-amber-300">Lock is LIVE</p>
+          <p className="font-semibold text-amber-300">Broadcast lock is LIVE</p>
           <p className="whitespace-pre-wrap text-gold-soft">{active.message}</p>
           <p className="break-all text-[10px] text-muted-foreground">{active.url}</p>
           <p className="text-[10px] uppercase tracking-widest text-gold">
@@ -1000,18 +1037,106 @@ function BroadcastLockCard() {
             onClick={() => { if (confirm("Delete broadcast lock?")) clearMut.mutate(); }}
             className="rounded bg-destructive/30 px-3 py-1 text-[10px] uppercase tracking-wider text-destructive"
           >
-            <Trash2 size={12} className="inline" /> Delete lock post
+            <Trash2 size={12} className="inline" /> Delete broadcast lock
           </button>
         </div>
-      ) : (
-        <p className="text-[11px] text-muted-foreground">No broadcast lock is currently active.</p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTarget("all")}
+          className={`flex-1 rounded border px-3 py-2 text-xs uppercase tracking-widest ${
+            target === "all"
+              ? "border-gold bg-gold/20 text-gold-soft"
+              : "border-gold-soft/30 bg-black/40 text-muted-foreground"
+          }`}
+        >
+          All users
+        </button>
+        <button
+          type="button"
+          onClick={() => { setTarget("selected"); setPickerOpen(true); }}
+          className={`flex-1 rounded border px-3 py-2 text-xs uppercase tracking-widest ${
+            target === "selected"
+              ? "border-gold bg-gold/20 text-gold-soft"
+              : "border-gold-soft/30 bg-black/40 text-muted-foreground"
+          }`}
+        >
+          Selected ({picked.size})
+        </button>
+      </div>
+
+      {target === "selected" && (
+        <div className="space-y-2 rounded border border-gold-soft/30 bg-black/30 p-2">
+          {picked.size > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {Array.from(picked.entries()).map(([uid, label]) => (
+                <span key={uid} className="inline-flex items-center gap-1 rounded-full border border-gold-soft/40 bg-black/40 px-2 py-0.5 text-[10px] text-gold-soft">
+                  {label}
+                  <button
+                    type="button"
+                    onClick={() => togglePick(uid, label)}
+                    className="text-destructive"
+                    aria-label="Remove"
+                  >×</button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPicked(new Map())}
+                className="text-[10px] text-destructive underline"
+              >Clear all</button>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setPickerOpen((o) => !o)}
+            className="w-full rounded border border-gold-soft/40 px-2 py-1.5 text-[11px] uppercase tracking-widest text-gold-soft"
+          >
+            {pickerOpen ? "Hide user picker" : "Show user picker"}
+          </button>
+          {pickerOpen && (
+            <>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search username or telegram_id"
+                className="w-full rounded border border-gold-soft/40 bg-black/40 px-2 py-1.5 text-xs"
+              />
+              <div className="max-h-56 space-y-1 overflow-y-auto">
+                {(userQ.data ?? []).map((u) => {
+                  const label = `@${u.username ?? u.first_name ?? u.telegram_id}`;
+                  const sel = picked.has(u.telegram_id);
+                  return (
+                    <label key={u.telegram_id} className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-xs ${sel ? "border-gold bg-gold/10" : "border-gold-soft/20 bg-black/30"}`}>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={sel}
+                          onChange={() => togglePick(u.telegram_id, label)}
+                        />
+                        <span className="text-gold-soft">{label}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">id {u.telegram_id}</span>
+                    </label>
+                  );
+                })}
+                {userQ.isLoading && <p className="text-center text-[10px] text-muted-foreground">Loading…</p>}
+                {!userQ.isLoading && (userQ.data ?? []).length === 0 && (
+                  <p className="text-center text-[10px] text-muted-foreground">No users match.</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       <div className="space-y-2">
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Instructions shown to every user"
+          placeholder="Instructions shown to the user(s)"
           rows={3}
           className="w-full rounded border border-gold-soft/40 bg-black/40 px-2 py-1.5 text-xs"
         />
@@ -1022,12 +1147,17 @@ function BroadcastLockCard() {
           className="w-full rounded border border-gold-soft/40 bg-black/40 px-2 py-1.5 text-xs font-mono"
         />
         <GoldButton
-          onClick={() => postMut.mutate()}
-          disabled={!message.trim() || !url.trim() || postMut.isPending}
+          onClick={() => (target === "all" ? postAllMut.mutate() : postSelectedMut.mutate())}
+          disabled={!canPost}
           className="w-full text-xs"
         >
-          {postMut.isPending ? "Posting…" : active ? "Replace broadcast lock" : "Post lock to all users"}
+          {target === "all"
+            ? postAllMut.isPending ? "Posting…" : active ? "Replace broadcast lock" : "Post lock to all users"
+            : postSelectedMut.isPending ? "Posting…" : `Post lock to ${picked.size} selected user${picked.size === 1 ? "" : "s"}`}
         </GoldButton>
+        <p className="text-[10px] text-muted-foreground">
+          Tip: per-user locks can also be added/removed individually from the Users tab.
+        </p>
       </div>
     </GoldFrame>
   );
