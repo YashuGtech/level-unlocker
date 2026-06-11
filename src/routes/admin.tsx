@@ -43,6 +43,7 @@ import {
 } from "@/lib/admin.functions";
 import {
   adminLockUser,
+  adminLockUsers,
   adminUnlockUser,
   adminBroadcastLock,
   adminClearBroadcastLock,
