@@ -11,7 +11,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { ArrowLeft, Lock, Save, Play, Trash2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Lock, Save, Play, Trash2, ShieldCheck, Grid3x3, Pencil, Plus, Minus } from "lucide-react";
 import { GoldFrame, GoldButton } from "@/components/gold-ui";
 import { Flappy, type Level as RuntimeLevel } from "@/components/flappy";
 import { devGetLevelByIndex, devListLevels, devUpsertLevelByIndex, devVerifyPassword, OBJ_TYPES } from "@/lib/levels.functions";
