@@ -9,7 +9,7 @@ import {
   CreditCard,
   Megaphone,
   Settings as SettingsIcon,
-  Map,
+  Map as MapIcon,
   ShieldCheck,
   Download,
   Trash2,
