@@ -197,8 +197,11 @@ function ObstaclePreview({ type, small = false }: { type: ObjType; small?: boole
   );
 }
 
+type Mode = "menu" | "single" | "six";
+
 function DevPage() {
   const [pwd, setPwd] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("menu");
   const [picked, setPicked] = useState<number | null>(null);
 
   useEffect(() => {
@@ -214,14 +217,58 @@ function DevPage() {
     }} />;
   }
 
-  if (picked == null) {
-    return <LevelPicker onPick={setPicked} onLogout={() => {
+  if (mode === "menu") {
+    return <ModeMenu onPick={setMode} onLogout={() => {
       window.localStorage.removeItem(STORAGE_PWD);
       setPwd(null);
     }} />;
   }
 
+  if (mode === "six") {
+    return <SixPackEditor password={pwd} onBack={() => setMode("menu")} />;
+  }
+
+  if (picked == null) {
+    return <LevelPicker onPick={setPicked} onLogout={() => setMode("menu")} />;
+  }
+
   return <Editor levelIndex={picked} password={pwd} onBack={() => setPicked(null)} />;
+}
+
+function ModeMenu({ onPick, onLogout }: { onPick: (m: Mode) => void; onLogout: () => void }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-black p-6">
+      <div className="w-full max-w-md space-y-4">
+        <div className="text-center">
+          <p className="text-[10px] uppercase tracking-widest text-gold">Dev Admin</p>
+          <h1 className="font-display text-2xl text-gradient-gold">Choose Edit Mode</h1>
+        </div>
+        <button
+          onClick={() => onPick("single")}
+          className="flex w-full items-center gap-3 rounded-xl border border-gold-soft/40 bg-black/60 p-4 text-left hover:border-gold"
+        >
+          <Pencil className="h-6 w-6 text-gold-soft" />
+          <div className="flex-1">
+            <p className="font-display text-base text-gold-soft">Single Level Edit</p>
+            <p className="text-[11px] text-muted-foreground">Pick one level (1-100) and edit it with all settings and full preview.</p>
+          </div>
+        </button>
+        <button
+          onClick={() => onPick("six")}
+          className="flex w-full items-center gap-3 rounded-xl border border-gold-soft/40 bg-black/60 p-4 text-left hover:border-gold"
+        >
+          <Grid3x3 className="h-6 w-6 text-gold-soft" />
+          <div className="flex-1">
+            <p className="font-display text-base text-gold-soft">6-Window Edit</p>
+            <p className="text-[11px] text-muted-foreground">Edit up to 6 levels side by side with live previews running at once.</p>
+          </div>
+        </button>
+        <button onClick={onLogout} className="block w-full text-center text-[10px] uppercase tracking-wider text-muted-foreground underline">
+          Lock dev panel
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function PasswordGate({ onUnlock }: { onUnlock: (p: string) => void }) {
