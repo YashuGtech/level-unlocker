@@ -923,4 +923,362 @@ function RandomPatternGenerator({
   );
 }
 
+// ─── 6-Window editor ───────────────────────────────────────────────────
+// Edit up to 6 levels at once. Each cell is independent: load, edit,
+// save. A shared tool palette and a single "Play all" toggle make it
+// easy to compare designs side-by-side. Live previews run in devMode
+// (bird is invincible) so the developer can watch the timeline scroll.
+
+type SixCellState = {
+  levelIndex: number;
+  objects: Obj[];
+  name: string;
+  duration: number;
+  gravity: number;
+  jump: number;
+  speed: number;
+  pipeGap: number;
+  bgColor: string;
+  repeat: boolean;
+  rewardPerCoin: number;
+  enabled: boolean;
+  weight: number;
+  loaded: boolean;
+};
+
+function defaultCell(idx: number): SixCellState {
+  return {
+    levelIndex: idx,
+    objects: [],
+    name: `Lv ${idx} · Dev`,
+    duration: 60,
+    gravity: 0.45,
+    jump: -7.5,
+    speed: 2.5,
+    pipeGap: 170,
+    bgColor: "#0a0a0a",
+    repeat: true,
+    rewardPerCoin: 1,
+    enabled: true,
+    weight: 10,
+    loaded: false,
+  };
+}
+
+function SixPackEditor({ password, onBack }: { password: string; onBack: () => void }) {
+  const [cells, setCells] = useState<SixCellState[]>(() =>
+    Array.from({ length: 6 }, (_, i) => defaultCell(i + 1)),
+  );
+  const [tool, setTool] = useState<ObjType>("pipe");
+  const [previewAll, setPreviewAll] = useState(false);
+
+  const updateCell = (i: number, patch: Partial<SixCellState>) =>
+    setCells((prev) => prev.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+
+  return (
+    <div className="min-h-screen bg-black px-3 pb-12 pt-4 text-gold-soft">
+      <div className="mx-auto max-w-7xl space-y-3">
+        <div className="flex items-center gap-2">
+          <button onClick={onBack} className="rounded-md border border-gold-soft/40 p-1.5 text-gold-soft">
+            <ArrowLeft size={16} />
+          </button>
+          <h1 className="flex-1 truncate font-display text-xl text-gradient-gold">6-Window Editor</h1>
+          <button
+            onClick={() => setPreviewAll((p) => !p)}
+            className={`flex items-center gap-1 rounded border px-3 py-1.5 text-xs uppercase tracking-widest ${
+              previewAll
+                ? "border-gold bg-gold/20 text-gold-soft"
+                : "border-gold-soft/40 text-gold-soft"
+            }`}
+          >
+            <Play size={12} /> {previewAll ? "Stop all previews" : "Play all previews"}
+          </button>
+        </div>
+
+        <GoldFrame className="p-2">
+          <p className="px-1 pb-2 text-[10px] uppercase tracking-widest text-gold">
+            Shared tool · click a cell's timeline to drop {OBJ_META[tool].label}
+          </p>
+          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5 lg:grid-cols-7">
+            {OBJ_TYPES.map((t) => {
+              const meta = OBJ_META[t as ObjType];
+              const active = tool === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTool(t as ObjType)}
+                  className={`flex flex-col items-center rounded border p-1.5 transition ${
+                    active ? "border-gold-soft bg-gold-soft/15" : "border-gold-soft/25 bg-black/45 hover:border-gold-soft/55"
+                  }`}
+                  aria-pressed={active}
+                  title={meta.label}
+                >
+                  <div className="flex h-12 w-full items-center justify-center overflow-hidden rounded bg-black/35">
+                    <ObstaclePreview type={t as ObjType} small />
+                  </div>
+                  <span className="mt-1 truncate text-[9px] uppercase tracking-wider text-gold-soft">
+                    {meta.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </GoldFrame>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {cells.map((c, i) => (
+            <SixCell
+              key={i}
+              password={password}
+              cell={c}
+              tool={tool}
+              preview={previewAll}
+              onPatch={(patch) => updateCell(i, patch)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SixCell({
+  password,
+  cell,
+  tool,
+  preview,
+  onPatch,
+}: {
+  password: string;
+  cell: SixCellState;
+  tool: ObjType;
+  preview: boolean;
+  onPatch: (patch: Partial<SixCellState>) => void;
+}) {
+  // Load this cell's level from the DB on mount or when its index changes.
+  const loadQ = useQuery({
+    queryKey: ["dev-level-six", cell.levelIndex],
+    queryFn: () => devGetLevelByIndex({ data: { password, level_index: cell.levelIndex } }),
+  });
+
+  useEffect(() => {
+    if (cell.loaded) return;
+    if (!loadQ.data) return;
+    if (loadQ.data.level) {
+      const l = loadQ.data.level;
+      onPatch({
+        name: l.name,
+        duration: l.duration_seconds,
+        gravity: l.gravity,
+        jump: l.jump_strength,
+        speed: l.scroll_speed,
+        pipeGap: l.pipe_gap,
+        bgColor: l.bg_color,
+        repeat: l.repeat_loop,
+        rewardPerCoin: l.reward_per_coin,
+        enabled: l.enabled,
+        weight: l.weight,
+        objects: loadQ.data.objects.map((o) => ({
+          id: o.id,
+          obj_type: o.obj_type as ObjType,
+          x_time: o.x_time,
+          y: o.y,
+          props: o.props as Record<string, number | string | boolean>,
+        })),
+        loaded: true,
+      });
+    } else {
+      onPatch({ loaded: true });
+    }
+  }, [loadQ.data, cell.loaded, onPatch]);
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      devUpsertLevelByIndex({
+        data: {
+          password,
+          level_index: cell.levelIndex,
+          name: cell.name,
+          duration_seconds: cell.duration,
+          gravity: cell.gravity,
+          jump_strength: cell.jump,
+          scroll_speed: cell.speed,
+          pipe_gap: cell.pipeGap,
+          enabled: cell.enabled,
+          weight: cell.weight,
+          repeat_loop: cell.repeat,
+          reward_per_coin: cell.rewardPerCoin,
+          bg_color: cell.bgColor,
+          objects: cell.objects.map(({ obj_type, x_time, y, props }) => ({ obj_type, x_time, y, props })),
+        },
+      }),
+    onSuccess: () => toast.success(`Saved Lv ${cell.levelIndex}`),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Save failed"),
+  });
+
+  const setIndex = (delta: number) => {
+    const next = clamp(cell.levelIndex + delta, 1, 100);
+    if (next === cell.levelIndex) return;
+    onPatch({ levelIndex: next, loaded: false, objects: [] });
+  };
+
+  const runtime: RuntimeLevel = {
+    id: `cell-${cell.levelIndex}`,
+    name: cell.name,
+    duration_seconds: cell.duration,
+    gravity: cell.gravity,
+    jump_strength: cell.jump,
+    scroll_speed: cell.speed,
+    pipe_gap: cell.pipeGap,
+    bg_color: cell.bgColor,
+    repeat_loop: cell.repeat,
+    reward_per_coin: cell.rewardPerCoin,
+  };
+
+  return (
+    <GoldFrame className="space-y-2 p-2">
+      <div className="flex items-center gap-1">
+        <button onClick={() => setIndex(-1)} className="rounded border border-gold-soft/40 p-1 text-gold-soft" aria-label="Prev"><Minus size={12} /></button>
+        <input
+          type="number"
+          min={1}
+          max={100}
+          value={cell.levelIndex}
+          onChange={(e) => {
+            const v = clamp(Number(e.target.value) || 1, 1, 100);
+            onPatch({ levelIndex: v, loaded: false, objects: [] });
+          }}
+          className="w-14 rounded border border-gold-soft/40 bg-black/40 px-1 py-0.5 text-center text-xs"
+        />
+        <button onClick={() => setIndex(+1)} className="rounded border border-gold-soft/40 p-1 text-gold-soft" aria-label="Next"><Plus size={12} /></button>
+        <span className="flex-1 truncate text-[10px] text-gold-soft/70">{cell.name}</span>
+        <button
+          onClick={() => saveMut.mutate()}
+          disabled={saveMut.isPending}
+          className="rounded bg-gradient-gold-flat p-1 text-primary-foreground"
+          aria-label="Save"
+          title="Save"
+        >
+          <Save size={12} />
+        </button>
+      </div>
+
+      <div className="text-[10px] text-gold-soft/70">
+        {cell.objects.length} obj · click timeline to place {OBJ_META[tool].label}
+      </div>
+
+      <SixMiniCanvas
+        duration={cell.duration}
+        objects={cell.objects}
+        tool={tool}
+        onAdd={(o) => onPatch({ objects: [...cell.objects, o] })}
+        onRemove={(id) => onPatch({ objects: cell.objects.filter((x) => x.id !== id) })}
+      />
+
+      <div className="overflow-hidden rounded border border-gold-soft/30" style={{ height: 150 }}>
+        {preview ? (
+          <Flappy
+            key={`prev-${cell.levelIndex}-${cell.objects.length}`}
+            level={runtime}
+            objects={cell.objects.map((o) => ({ id: o.id, obj_type: o.obj_type, x_time: o.x_time, y: o.y, props: o.props }))}
+            devMode
+            editorPreview
+            onEnd={() => { /* dev preview loops via re-mount on next click */ }}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-widest text-gold-soft/40">
+            Press “Play all previews” to run
+          </div>
+        )}
+      </div>
+    </GoldFrame>
+  );
+}
+
+// Compact timeline used inside each 6-window cell.
+function SixMiniCanvas({
+  duration,
+  objects,
+  tool,
+  onAdd,
+  onRemove,
+}: {
+  duration: number;
+  objects: Obj[];
+  tool: ObjType;
+  onAdd: (o: Obj) => void;
+  onRemove: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  const height = 160;
+
+  useEffect(() => {
+    if (!ref.current) return;
+    setWidth(ref.current.getBoundingClientRect().width);
+    const obs = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const pxPerSec = Math.max(10, width / Math.max(10, duration));
+  const totalWidth = duration * pxPerSec;
+
+  const pointAt = (clientX: number, clientY: number, host: HTMLDivElement) => {
+    const rect = host.getBoundingClientRect();
+    const x = clientX - rect.left + host.scrollLeft;
+    const y = clientY - rect.top;
+    const x_time = Math.max(0, Math.round((x / pxPerSec) * 10) / 10);
+    const yNorm = clamp(y / height, 0.08, 0.92);
+    return { x, y, x_time, yNorm };
+  };
+
+  return (
+    <div
+      ref={ref}
+      onClick={(e) => onAdd(makeObject(tool, pointAt(e.clientX, e.clientY, e.currentTarget)))}
+      className="relative overflow-x-auto rounded border border-gold-soft/30 bg-[linear-gradient(180deg,rgba(22,14,6,0.92),rgba(8,8,8,0.98))]"
+      style={{ height }}
+    >
+      <div className="relative" style={{ width: Math.max(totalWidth, width), height }}>
+        {Array.from({ length: Math.floor(duration / 10) + 1 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute bottom-0 top-0 border-l border-gold-soft/15 text-[8px] text-gold-soft/45"
+            style={{ left: i * 10 * pxPerSec, paddingLeft: 2 }}
+          >
+            {i * 10}s
+          </div>
+        ))}
+        {objects.map((o) => {
+          const meta = OBJ_META[o.obj_type];
+          const x = o.x_time * pxPerSec;
+          const y = o.y * height;
+          // Compact preview: pad a tiny square indicator rather than the
+          // full-size ObstaclePreview (those wouldn't fit at 160px height).
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRemove(o.id); }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 outline-none"
+              style={{ left: x, top: y }}
+              title={`${meta.label} @ ${o.x_time}s — click to remove`}
+            >
+              <span
+                className="block border border-dashed border-gold-soft/70 bg-black/40"
+                style={{
+                  width: Math.max(10, Math.round(meta.width * 0.4)),
+                  height: Math.max(10, Math.round(meta.height * 0.4)),
+                  backgroundColor: meta.accent + "55",
+                }}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
