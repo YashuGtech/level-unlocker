@@ -363,10 +363,8 @@ function TreasuryCard({
 }
 
 function DepositsTab({
-  deposits,
-  onChange,
+  onChange: _onChange,
 }: {
-  deposits: Awaited<ReturnType<typeof getAdminOverview>>["deposits"];
   onChange: () => void;
 }) {
   const { initData } = useSession();
@@ -377,32 +375,6 @@ function DepositsTab({
     queryKey: ["admin-deposit-stats"],
     queryFn: () => getDepositStats({ data: { initData: initData! } }),
     enabled: !!initData,
-  });
-
-  const approveMut = useMutation({
-    mutationFn: (id: string) => approveDeposit({ data: { initData: initData!, depositId: id } }),
-    onSuccess: (r) => {
-      sfx.win();
-      toast.success(`Approved · +${r.credited.toFixed(2)} GTC`);
-      onChange();
-      stats.refetch();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
-  const [reasonId, setReasonId] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
-  const rejectMut = useMutation({
-    mutationFn: (v: { id: string; reason: string }) =>
-      rejectDeposit({ data: { initData: initData!, depositId: v.id, reason: v.reason } }),
-    onSuccess: () => {
-      sfx.coin();
-      toast.success("Rejected");
-      setReasonId(null);
-      setReason("");
-      onChange();
-      stats.refetch();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const submitSearch = () => {
