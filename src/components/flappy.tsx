@@ -151,24 +151,15 @@ export function Flappy({ level, objects, levelIndex = 1, devMode = false, editor
       nextIdx++;
     }
 
-    // ── Fixed gravity tiers ──────────────────────────────────────
-    // Levels  1–30  : Moon gravity (easy onboarding).
-    // Levels 31–100 : Earth gravity (fixed for all later levels).
-    // Values are hard-coded so the feel is identical across every
-    // play session — Dev Trial AND real Telegram players use the same
-    // numbers because both render through this component.
-    const ULTRA_EASY = levelIndex <= 30;
-    const IS_LEVEL_1 = levelIndex === 1;
-    // Lighter moon gravity for 1–30 so the bird floats more.
-    const MOON_GRAVITY = 0.18;
-    // Tuned to feel like classic Flappy Bird (not the heavy 0.55 drop).
-    const EARTH_GRAVITY = 0.38;
-    const eGravity = IS_LEVEL_1 ? 0.14 : ULTRA_EASY ? MOON_GRAVITY : EARTH_GRAVITY;
-    const eJump = ULTRA_EASY ? level.jump_strength : -8.5;
-    // Level 1 scrolls noticeably slower so first-time players can react.
-    const eScroll = IS_LEVEL_1 ? level.scroll_speed * 0.55 : ULTRA_EASY ? level.scroll_speed * 0.7 : level.scroll_speed;
-    // Maximum vertical gap on level 1; comfortable gap on early levels.
-    const ePipeGap = IS_LEVEL_1 ? 300 : ULTRA_EASY ? 260 : FIXED_PIPE_GAP;
+    // ── Dev-authored physics ─────────────────────────────────────
+    // Use EXACTLY what the dev set in /dev for this level. No tier
+    // overrides — gravity, jump, scroll, and pipe gap come from the
+    // level row so changes saved in /dev apply instantly to all
+    // real-time players and Dev Trial previews.
+    const eGravity = level.gravity;
+    const eJump = level.jump_strength;
+    const eScroll = level.scroll_speed;
+    const ePipeGap = level.pipe_gap;
 
     // BACKEND-ONLY MODE: render exactly what the dev team placed in the
     // editor. The per-level PDF allow-list has been removed so every gold
