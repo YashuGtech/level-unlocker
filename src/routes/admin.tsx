@@ -30,8 +30,6 @@ import {
   resetTreasury,
   findTransaction,
   listUsers,
-  approveDeposit,
-  rejectDeposit,
   updateSettings,
   upsertAnnouncement,
   deleteAnnouncement,
@@ -144,7 +142,6 @@ function AdminPanel() {
       {overview.data && tab === "dashboard" && <Dashboard data={overview.data} />}
       {overview.data && tab === "deposits" && (
         <DepositsTab
-          deposits={overview.data.deposits}
           onChange={() => {
             void qc.invalidateQueries({ queryKey: ["admin-overview"] });
           }}
@@ -363,10 +360,8 @@ function TreasuryCard({
 }
 
 function DepositsTab({
-  deposits,
-  onChange,
+  onChange: _onChange,
 }: {
-  deposits: Awaited<ReturnType<typeof getAdminOverview>>["deposits"];
   onChange: () => void;
 }) {
   const { initData } = useSession();
@@ -377,32 +372,6 @@ function DepositsTab({
     queryKey: ["admin-deposit-stats"],
     queryFn: () => getDepositStats({ data: { initData: initData! } }),
     enabled: !!initData,
-  });
-
-  const approveMut = useMutation({
-    mutationFn: (id: string) => approveDeposit({ data: { initData: initData!, depositId: id } }),
-    onSuccess: (r) => {
-      sfx.win();
-      toast.success(`Approved · +${r.credited.toFixed(2)} GTC`);
-      onChange();
-      stats.refetch();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
-  const [reasonId, setReasonId] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
-  const rejectMut = useMutation({
-    mutationFn: (v: { id: string; reason: string }) =>
-      rejectDeposit({ data: { initData: initData!, depositId: v.id, reason: v.reason } }),
-    onSuccess: () => {
-      sfx.coin();
-      toast.success("Rejected");
-      setReasonId(null);
-      setReason("");
-      onChange();
-      stats.refetch();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const submitSearch = () => {
@@ -444,70 +413,6 @@ function DepositsTab({
     </Link>
   );
 
-  const renderCard = (d: typeof deposits[number]) => (
-    <GoldFrame key={d.id} className="p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-display font-bold text-gold-soft">+{d.amount_gtc.toFixed(2)} GTC</p>
-          <p className="text-[11px] text-muted-foreground">
-            @{d.username ?? d.first_name ?? d.user_id} · ${d.amount_usdt.toFixed(2)}
-          </p>
-          <a
-            href={`https://bscscan.com/tx/${d.tx_hash}`}
-            target="_blank"
-            rel="noreferrer"
-            className="block truncate font-mono text-[10px] text-gold-soft/70 underline"
-          >
-            {d.tx_hash}
-          </a>
-        </div>
-        {d.status === "pending" && (
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={() => approveMut.mutate(d.id)}
-              className="rounded bg-success/20 px-2 py-1 text-success"
-              aria-label="Approve"
-            >
-              <Check size={14} />
-            </button>
-            <button
-              onClick={() => setReasonId(d.id)}
-              className="rounded bg-destructive/20 px-2 py-1 text-destructive"
-              aria-label="Reject"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-      </div>
-      {reasonId === d.id && (
-        <div className="mt-2 space-y-2">
-          <input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason"
-            className="w-full rounded border border-gold-soft/40 bg-black/40 px-2 py-1 text-xs"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => rejectMut.mutate({ id: d.id, reason })}
-              disabled={!reason.trim()}
-              className="flex-1 rounded bg-destructive/30 px-2 py-1 text-xs"
-            >
-              Confirm reject
-            </button>
-            <button onClick={() => setReasonId(null)} className="flex-1 rounded bg-card px-2 py-1 text-xs">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </GoldFrame>
-  );
-
-  const pendingPreview = deposits.filter((d) => d.status === "pending").slice(0, 1);
-  const rejectedPreview = deposits.filter((d) => d.status === "rejected").slice(0, 1);
-  const approvedPreview = deposits.filter((d) => d.status === "approved").slice(0, 1);
 
   const s = stats.data ?? {
     pending: { count: 0, totalUsdt: 0 },
@@ -543,56 +448,15 @@ function DepositsTab({
         </div>
       </GoldFrame>
 
-      <SectionHeader label="Pending Deposits" count={s.pending.count} status="pending" color="text-gold" />
-      {pendingPreview.length === 0 ? (
-        <p className="text-center text-xs text-muted-foreground">No pending deposits.</p>
-      ) : (
-        pendingPreview.map(renderCard)
-      )}
-
-      <SectionHeader label="Rejected Deposits" count={s.rejected.count} status="rejected" color="text-destructive" />
-      {rejectedPreview.length === 0 ? (
-        <p className="text-center text-xs text-muted-foreground">No rejected deposits.</p>
-      ) : (
-        rejectedPreview.map(renderCard)
-      )}
-
-      <SectionHeader label="Approved Deposits" count={s.approved.count} status="approved" color="text-success" />
-      {approvedPreview.length === 0 ? (
-        <p className="text-center text-xs text-muted-foreground">No approved deposits.</p>
-      ) : (
-        approvedPreview.map(renderCard)
-      )}
+      <GoldFrame className="p-4 text-center">
+        <p className="text-xs text-muted-foreground">
+          Click any card above to view deposits on a dedicated page.
+        </p>
+      </GoldFrame>
     </div>
   );
 }
 
-function SectionHeader({
-  label,
-  count,
-  status,
-  color,
-}: {
-  label: string;
-  count: number;
-  status: "pending" | "rejected" | "approved" | "all";
-  color: string;
-}) {
-  return (
-    <div className="flex items-center justify-between pt-1">
-      <h3 className={`font-display text-xs font-bold uppercase tracking-widest ${color}`}>
-        {label} ({count})
-      </h3>
-      <Link
-        to="/admin/deposits/$status"
-        params={{ status }}
-        className="rounded-full border border-gold-soft/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-gold-soft"
-      >
-        View All
-      </Link>
-    </div>
-  );
-}
 
 
 function UsersTab({ onChange }: { onChange: () => void }) {
