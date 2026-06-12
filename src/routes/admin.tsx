@@ -505,10 +505,6 @@ function DepositsTab({
     </GoldFrame>
   );
 
-  const pendingPreview = deposits.filter((d) => d.status === "pending").slice(0, 1);
-  const rejectedPreview = deposits.filter((d) => d.status === "rejected").slice(0, 1);
-  const approvedPreview = deposits.filter((d) => d.status === "approved").slice(0, 1);
-
   const s = stats.data ?? {
     pending: { count: 0, totalUsdt: 0 },
     rejected: { count: 0, totalUsdt: 0 },
@@ -543,26 +539,11 @@ function DepositsTab({
         </div>
       </GoldFrame>
 
-      <SectionHeader label="Pending Deposits" count={s.pending.count} status="pending" color="text-gold" />
-      {pendingPreview.length === 0 ? (
-        <p className="text-center text-xs text-muted-foreground">No pending deposits.</p>
-      ) : (
-        pendingPreview.map(renderCard)
-      )}
-
-      <SectionHeader label="Rejected Deposits" count={s.rejected.count} status="rejected" color="text-destructive" />
-      {rejectedPreview.length === 0 ? (
-        <p className="text-center text-xs text-muted-foreground">No rejected deposits.</p>
-      ) : (
-        rejectedPreview.map(renderCard)
-      )}
-
-      <SectionHeader label="Approved Deposits" count={s.approved.count} status="approved" color="text-success" />
-      {approvedPreview.length === 0 ? (
-        <p className="text-center text-xs text-muted-foreground">No approved deposits.</p>
-      ) : (
-        approvedPreview.map(renderCard)
-      )}
+      <GoldFrame className="p-4 text-center">
+        <p className="text-xs text-muted-foreground">
+          Click any card above to view deposits on a dedicated page.
+        </p>
+      </GoldFrame>
     </div>
   );
 }
