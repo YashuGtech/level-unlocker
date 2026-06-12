@@ -30,8 +30,6 @@ import {
   resetTreasury,
   findTransaction,
   listUsers,
-  approveDeposit,
-  rejectDeposit,
   updateSettings,
   upsertAnnouncement,
   deleteAnnouncement,
