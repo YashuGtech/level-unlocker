@@ -36,7 +36,23 @@ export const getAdminOverview = createServerFn({ method: "POST" })
       supabaseAdmin.from("announcements").select("*").order("created_at", { ascending: false }),
       supabaseAdmin.from("levels").select("*").order("created_at", { ascending: false }),
       supabaseAdmin.from("admins").select("*"),
-      supabaseAdmin.from("admin_logs").select("*").order("created_at", { ascending: false }).limit(20),
+      // Only surface deposit-related and user-related admin actions in the dashboard.
+      supabaseAdmin
+        .from("admin_logs")
+        .select("*")
+        .or(
+          [
+            "action.ilike.%deposit%",
+            "action.ilike.%user%",
+            "action.ilike.%ban%",
+            "action.ilike.%unban%",
+            "action.ilike.%lock%",
+            "action.ilike.%unlock%",
+            "action.ilike.%adjust%",
+          ].join(","),
+        )
+        .order("created_at", { ascending: false })
+        .limit(20),
     ]);
 
     const settingsMap: Record<string, string | number | boolean | null> = {};

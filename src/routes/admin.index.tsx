@@ -52,7 +52,7 @@ import { deleteLevel } from "@/lib/levels.functions";
 import { exportFrontendZip } from "@/lib/export.functions";
 import { exportDatabaseBackup } from "@/lib/backup.functions";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/admin/")({
   component: AdminRoute,
 });
 
@@ -888,6 +888,12 @@ function BroadcastLockCard() {
         Broadcast (all) is dismissed once per user after click. Selected-user locks must be
         removed manually from the Users tab anytime.
       </p>
+
+      <div className="rounded border border-gold-soft/40 bg-black/40 p-2 text-center">
+        <p className="text-[10px] uppercase tracking-widest text-gold">Engagement · current lock post</p>
+        <p className="font-display text-2xl text-gradient-gold">{verifiedCount}</p>
+        <p className="text-[10px] text-muted-foreground">verified clicks {active ? "(live)" : "(last broadcast)"}</p>
+      </div>
 
       {active && (
         <div className="space-y-2 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
