@@ -52,7 +52,7 @@ import { deleteLevel } from "@/lib/levels.functions";
 import { exportFrontendZip } from "@/lib/export.functions";
 import { exportDatabaseBackup } from "@/lib/backup.functions";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/admin/")({
   component: AdminRoute,
 });
 
