@@ -153,6 +153,7 @@ function AdminPanel() {
         />
       )}
       {tab === "users" && <UsersTab onChange={() => qc.invalidateQueries({ queryKey: ["admin-overview"] })} />}
+      {tab === "scan" && <ScanTab />}
       {overview.data && tab === "levels" && (
         <LevelsTab levels={overview.data.levels} onChange={() => qc.invalidateQueries({ queryKey: ["admin-overview"] })} />
       )}
