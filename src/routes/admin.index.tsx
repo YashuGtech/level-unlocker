@@ -194,16 +194,25 @@ function Dashboard({ data }: { data: Awaited<ReturnType<typeof getAdminOverview>
   });
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <GoldFrame className="p-4 text-center">
           <p className="text-xs uppercase tracking-widest text-gold">Users</p>
           <p className="font-display text-3xl font-bold text-gradient-gold">{data.stats.totalUsers}</p>
+        </GoldFrame>
+        <GoldFrame className="p-4 text-center" glow>
+          <p className="text-xs uppercase tracking-widest text-emerald-300">Online</p>
+          <p className="font-display text-3xl font-bold text-emerald-300">
+            <span className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400 align-middle" />
+            {data.stats.onlineUsers}
+          </p>
+          <p className="mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">active · 5 min</p>
         </GoldFrame>
         <GoldFrame className="p-4 text-center">
           <p className="text-xs uppercase tracking-widest text-gold">Pending</p>
           <p className="font-display text-3xl font-bold text-gradient-gold">{data.stats.pendingDeposits}</p>
         </GoldFrame>
       </div>
+
 
       <TreasuryCard
         data={treasury.data}
