@@ -101,6 +101,7 @@ function AdminPanel() {
     { id: "dashboard", label: "Dash", icon: LayoutDashboard },
     { id: "deposits", label: "Deposits", icon: CreditCard },
     { id: "users", label: "Users", icon: Users },
+    { id: "scan", label: "Scan", icon: AlertTriangle },
     { id: "levels", label: "Levels", icon: MapIcon },
     { id: "announcements", label: "Posts", icon: Megaphone },
     { id: "settings", label: "Settings", icon: SettingsIcon },
