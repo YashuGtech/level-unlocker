@@ -19,6 +19,7 @@ import {
   X,
   Search,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { GoldFrame, GoldButton } from "@/components/gold-ui";
