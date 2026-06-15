@@ -76,6 +76,7 @@ function AdminPanel() {
     queryKey: ["admin-overview"],
     queryFn: () => getAdminOverview({ data: { initData: initData! } }),
     enabled: !!initData && !!admin,
+    refetchInterval: 20_000,
   });
 
   if (!admin) {
