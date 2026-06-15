@@ -471,15 +471,27 @@ export const finishGame = createServerFn({ method: "POST" })
       latest?.current_level ?? (user as unknown as { current_level?: number }).current_level ?? 1,
     );
     const milestone = oldLevel === 50 || oldLevel === 100 ? MILESTONE_BONUS : 0;
-    // Prize = FIXED level prize (defined in this file) + (coins collected +
-    // auto level bonus coins) × coin value + milestone bonus.
-    // The flat per-level reward is locked to LEVEL_FLAT_REWARD_DEFAULT so a
-    // successful 60-second run always pays out the same guaranteed amount,
-    // regardless of admin settings drift.
-    const totalCoins = data.coinsCollected + settings.levelCoinBonus;
-    const coinsValueGtc = totalCoins * settings.coinValueGtc;
+    // ── HARD EARNINGS CAP ──────────────────────────────────────────────
+    // Players earn EXACTLY 200 GTC per level + milestone bonuses (5k at
+    // level 50, 5k at level 100). Coins collected are cosmetic only — they
+    // do NOT add GTC. Lifetime gameplay earnings are capped at 30,000 GTC
+    // (200 × 100 + 5000 + 5000). Referral earnings continue beyond that.
+    const LIFETIME_GAME_CAP = 30000;
     const basePrize = LEVEL_FLAT_REWARD_DEFAULT;
-    const credited = basePrize + coinsValueGtc + milestone;
+    const totalCoins = data.coinsCollected + settings.levelCoinBonus;
+    void settings.coinValueGtc; // retained for backward compat; coins are cosmetic
+    let credited = basePrize + milestone;
+
+    // Sum prior gameplay earnings (game_reward only — referrals are separate).
+    const { data: prior } = await supabaseAdmin
+      .from("transactions")
+      .select("amount_gtc")
+      .eq("user_id", user.telegram_id)
+      .eq("kind", "game_reward");
+    const earnedSoFar = (prior ?? []).reduce((s, r) => s + Number(r.amount_gtc), 0);
+    const remainingCap = Math.max(0, LIFETIME_GAME_CAP - earnedSoFar);
+    if (credited > remainingCap) credited = remainingCap;
+
     const newBal = Number(latest?.balance_gtc ?? 0) + credited;
     const newLevel = Math.min(settings.cap, oldLevel + 1);
     const completedCount = Number(latest?.levels_completed ?? 0) + 1;
@@ -510,8 +522,9 @@ export const finishGame = createServerFn({ method: "POST" })
     const noteParts = [
       `Lv ${oldLevel} complete`,
       `base ${basePrize}`,
-      `${data.coinsCollected}+${settings.levelCoinBonus} coins × ${settings.coinValueGtc} = ${coinsValueGtc} GTC`,
+      `coins ${data.coinsCollected}+${settings.levelCoinBonus} (cosmetic)`,
     ];
+    if (credited < basePrize + milestone) noteParts.push(`capped at 30k lifetime`);
     if (milestone > 0) noteParts.push(`milestone +${milestone}`);
     await supabaseAdmin.from("transactions").insert({
       user_id: user.telegram_id,

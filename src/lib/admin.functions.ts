@@ -786,3 +786,131 @@ export const listDepositsByStatus = createServerFn({ method: "POST" })
       })),
     };
   });
+
+// ===== Suspicious balance scan =====
+// Flags users whose gameplay earnings exceed the 30k lifetime cap, or whose
+// balance can't be explained by deposits + capped gameplay + referrals.
+const LIFETIME_GAME_CAP = 30_000;
+
+export const scanSuspiciousUsers = createServerFn({ method: "POST" })
+  .inputValidator((input) => InitOnly.parse(input))
+  .handler(async ({ data }) => {
+    await requireAdmin(data.initData);
+
+    const { data: txs } = await supabaseAdmin
+      .from("transactions")
+      .select("user_id, kind, amount_gtc");
+
+    type Agg = { game: number; ref: number; deposit: number; adjust: number; spend: number };
+    const byUser = new Map<number, Agg>();
+    for (const t of txs ?? []) {
+      const uid = Number(t.user_id);
+      const a = Number(t.amount_gtc);
+      const row = byUser.get(uid) ?? { game: 0, ref: 0, deposit: 0, adjust: 0, spend: 0 };
+      if (t.kind === "game_reward") row.game += a;
+      else if (t.kind === "referral_bonus" || t.kind === "referral_share") row.ref += a;
+      else if (t.kind === "deposit") row.deposit += a;
+      else if (t.kind === "admin_adjust") row.adjust += a;
+      else if (a < 0) row.spend += -a;
+      byUser.set(uid, row);
+    }
+
+    const uids = Array.from(byUser.keys());
+    if (uids.length === 0) return { users: [] };
+
+    const { data: urows } = await supabaseAdmin
+      .from("users")
+      .select("telegram_id, username, first_name, balance_gtc, levels_completed")
+      .in("telegram_id", uids);
+
+    const flagged: Array<{
+      telegram_id: number;
+      username: string | null;
+      first_name: string | null;
+      balance_gtc: number;
+      levels_completed: number;
+      game_earned: number;
+      ref_earned: number;
+      deposit_total: number;
+      adjust_total: number;
+      expected_balance: number;
+      delta: number;
+      reasons: string[];
+    }> = [];
+
+    for (const u of urows ?? []) {
+      const uid = Number(u.telegram_id);
+      const agg = byUser.get(uid)!;
+      const expected = agg.game + agg.ref + agg.deposit + agg.adjust - agg.spend;
+      const bal = Number(u.balance_gtc);
+      const delta = bal - expected;
+      const reasons: string[] = [];
+      if (agg.game > LIFETIME_GAME_CAP + 0.5) reasons.push(`game earnings ${agg.game.toFixed(0)} > 30k cap`);
+      if (Math.abs(delta) > 1) reasons.push(`balance off by ${delta.toFixed(0)} vs ledger`);
+      if (reasons.length > 0) {
+        flagged.push({
+          telegram_id: uid,
+          username: u.username,
+          first_name: u.first_name,
+          balance_gtc: bal,
+          levels_completed: Number(u.levels_completed ?? 0),
+          game_earned: agg.game,
+          ref_earned: agg.ref,
+          deposit_total: agg.deposit,
+          adjust_total: agg.adjust,
+          expected_balance: expected,
+          delta,
+          reasons,
+        });
+      }
+    }
+
+    flagged.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+    return { users: flagged };
+  });
+
+const HistoryInput = z.object({
+  initData: z.string().min(1).max(16384),
+  userId: z.number().int().positive(),
+  limit: z.number().int().min(1).max(500).default(200),
+});
+
+export const getUserHistory = createServerFn({ method: "POST" })
+  .inputValidator((input) => HistoryInput.parse(input))
+  .handler(async ({ data }) => {
+    await requireAdmin(data.initData);
+    const [{ data: user }, { data: txs }] = await Promise.all([
+      supabaseAdmin
+        .from("users")
+        .select("telegram_id, username, first_name, balance_gtc, levels_completed, banned, created_at")
+        .eq("telegram_id", data.userId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("transactions")
+        .select("id, kind, amount_gtc, balance_after, note, created_at")
+        .eq("user_id", data.userId)
+        .order("created_at", { ascending: false })
+        .limit(data.limit),
+    ]);
+    return {
+      user: user
+        ? {
+            telegram_id: Number(user.telegram_id),
+            username: user.username,
+            first_name: user.first_name,
+            balance_gtc: Number(user.balance_gtc),
+            levels_completed: Number(user.levels_completed ?? 0),
+            banned: !!user.banned,
+            created_at: user.created_at,
+          }
+        : null,
+      transactions: (txs ?? []).map((t) => ({
+        id: t.id,
+        kind: t.kind,
+        amount_gtc: Number(t.amount_gtc),
+        balance_after: Number(t.balance_after),
+        note: t.note,
+        created_at: t.created_at,
+      })),
+    };
+  });
