@@ -38,6 +38,8 @@ import {
   addSecondaryAdmin,
   removeSecondaryAdmin,
   getDepositStats,
+  scanSuspiciousUsers,
+  getUserHistory,
 } from "@/lib/admin.functions";
 import {
   adminLockUser,
