@@ -71,6 +71,7 @@ export const getAdminOverview = createServerFn({ method: "POST" })
       role: admin!.role,
       stats: {
         totalUsers: totalUsers ?? 0,
+        onlineUsers: onlineUsers ?? 0,
         pendingDeposits: pendingDeposits ?? 0,
       },
       deposits: (recentDeposits ?? []).map((d) => ({
