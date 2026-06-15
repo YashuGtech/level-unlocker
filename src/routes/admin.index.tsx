@@ -1280,3 +1280,141 @@ function DatabaseBackup() {
     </GoldFrame>
   );
 }
+
+function ScanTab() {
+  const { initData } = useSession();
+  const [openUser, setOpenUser] = useState<number | null>(null);
+  const scan = useQuery({
+    queryKey: ["admin-scan"],
+    queryFn: () => scanSuspiciousUsers({ data: { initData: initData! } }),
+    enabled: !!initData,
+  });
+  return (
+    <div className="space-y-3">
+      <GoldFrame className="p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-display text-sm uppercase tracking-widest text-gold-soft">
+              Suspicious balance scan
+            </h3>
+            <p className="text-[11px] text-muted-foreground">
+              Flags users whose gameplay earnings exceed the 30,000 GTC lifetime cap or whose balance doesn't reconcile with the ledger.
+            </p>
+          </div>
+          <GoldButton onClick={() => scan.refetch()} disabled={scan.isFetching} className="text-xs">
+            {scan.isFetching ? "Scanning…" : "Re-scan"}
+          </GoldButton>
+        </div>
+      </GoldFrame>
+
+      {scan.isLoading && <p className="text-center text-sm text-muted-foreground">Scanning ledger…</p>}
+      {scan.data && scan.data.users.length === 0 && (
+        <GoldFrame className="p-6 text-center">
+          <p className="text-sm text-emerald-300">No suspicious users detected.</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">All balances reconcile with the ledger and stay within the 30k cap.</p>
+        </GoldFrame>
+      )}
+      {scan.data?.users.map((u) => (
+        <GoldFrame key={u.telegram_id} className="p-3">
+          <button
+            type="button"
+            onClick={() => setOpenUser(openUser === u.telegram_id ? null : u.telegram_id)}
+            className="flex w-full items-start justify-between gap-2 text-left"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="font-display font-bold text-gold-soft">
+                @{u.username ?? u.first_name ?? u.telegram_id}
+              </p>
+              <p className="text-[11px] text-muted-foreground">id {u.telegram_id} · {u.levels_completed} lv</p>
+              <ul className="mt-1 space-y-0.5">
+                {u.reasons.map((r, i) => (
+                  <li key={i} className="text-[11px] text-amber-300">⚠ {r}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="text-right">
+              <p className="font-display font-bold text-gradient-gold">{u.balance_gtc.toFixed(0)}</p>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                game {u.game_earned.toFixed(0)} · ref {u.ref_earned.toFixed(0)}
+              </p>
+              <p className="text-[10px] uppercase tracking-widest text-amber-300">
+                Δ {u.delta.toFixed(0)}
+              </p>
+            </div>
+          </button>
+          {openUser === u.telegram_id && (
+            <UserHistoryPanel userId={u.telegram_id} />
+          )}
+        </GoldFrame>
+      ))}
+    </div>
+  );
+}
+
+function UserHistoryPanel({ userId }: { userId: number }) {
+  const { initData } = useSession();
+  const hist = useQuery({
+    queryKey: ["admin-user-history", userId],
+    queryFn: () => getUserHistory({ data: { initData: initData!, userId, limit: 200 } }),
+    enabled: !!initData,
+  });
+  const adjMut = useMutation({
+    mutationFn: (delta: number) =>
+      adjustBalance({ data: { initData: initData!, userId, delta, note: "Suspicious-scan adjust" } }),
+    onSuccess: () => { toast.success("Balance adjusted"); hist.refetch(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  const banMut = useMutation({
+    mutationFn: (banned: boolean) => setUserBanned({ data: { initData: initData!, userId, banned } }),
+    onSuccess: () => { toast.success("Updated"); hist.refetch(); },
+  });
+
+  if (hist.isLoading) return <p className="mt-2 text-xs text-muted-foreground">Loading history…</p>;
+  if (!hist.data?.user) return <p className="mt-2 text-xs text-destructive">User not found.</p>;
+  const u = hist.data.user;
+  return (
+    <div className="mt-3 space-y-2 border-t border-gold-soft/20 pt-3">
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => {
+            const v = prompt("Adjust balance by (e.g. -500)", "0");
+            const n = v ? Number(v) : NaN;
+            if (!isNaN(n) && n !== 0) adjMut.mutate(n);
+          }}
+          className="rounded bg-gold/20 px-2 py-1 text-[10px] text-gold-soft"
+        >± Balance</button>
+        <button
+          onClick={() => banMut.mutate(!u.banned)}
+          className="rounded bg-destructive/20 px-2 py-1 text-[10px] text-destructive"
+        >{u.banned ? "Unban" : "Ban"}</button>
+      </div>
+      <div className="max-h-64 overflow-y-auto rounded border border-gold-soft/20 bg-black/30">
+        <table className="w-full text-[10px]">
+          <thead className="bg-black/50 text-gold-soft">
+            <tr>
+              <th className="px-1.5 py-1 text-left">Kind</th>
+              <th className="px-1.5 py-1 text-right">Δ</th>
+              <th className="px-1.5 py-1 text-right">Balance</th>
+              <th className="px-1.5 py-1 text-left">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hist.data.transactions.map((t) => (
+              <tr key={t.id} className="border-t border-gold-soft/10">
+                <td className="px-1.5 py-1 text-gold-soft">{t.kind}</td>
+                <td className={`px-1.5 py-1 text-right font-mono ${t.amount_gtc >= 0 ? "text-emerald-300" : "text-destructive"}`}>
+                  {t.amount_gtc >= 0 ? "+" : ""}{t.amount_gtc.toFixed(0)}
+                </td>
+                <td className="px-1.5 py-1 text-right font-mono">{t.balance_after.toFixed(0)}</td>
+                <td className="px-1.5 py-1 text-muted-foreground">{new Date(t.created_at).toLocaleString()}</td>
+              </tr>
+            ))}
+            {hist.data.transactions.length === 0 && (
+              <tr><td colSpan={4} className="p-3 text-center text-muted-foreground">No transactions.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
