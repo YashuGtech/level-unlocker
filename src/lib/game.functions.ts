@@ -522,8 +522,9 @@ export const finishGame = createServerFn({ method: "POST" })
     const noteParts = [
       `Lv ${oldLevel} complete`,
       `base ${basePrize}`,
-      `${data.coinsCollected}+${settings.levelCoinBonus} coins × ${settings.coinValueGtc} = ${coinsValueGtc} GTC`,
+      `coins ${data.coinsCollected}+${settings.levelCoinBonus} (cosmetic)`,
     ];
+    if (credited < basePrize + milestone) noteParts.push(`capped at 30k lifetime`);
     if (milestone > 0) noteParts.push(`milestone +${milestone}`);
     await supabaseAdmin.from("transactions").insert({
       user_id: user.telegram_id,
