@@ -59,7 +59,7 @@ export const Route = createFileRoute("/admin/")({
   component: AdminRoute,
 });
 
-type Tab = "dashboard" | "users" | "deposits" | "announcements" | "settings" | "levels" | "admins";
+type Tab = "dashboard" | "users" | "deposits" | "announcements" | "settings" | "levels" | "admins" | "scan";
 
 function AdminRoute() {
   return (
