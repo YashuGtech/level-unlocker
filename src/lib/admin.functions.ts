@@ -15,8 +15,10 @@ export const getAdminOverview = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { admin } = await requireAdmin(data.initData);
 
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
     const [
       { count: totalUsers },
+      { count: onlineUsers },
       { count: pendingDeposits },
       { data: recentDeposits },
       { data: settings },
@@ -26,6 +28,10 @@ export const getAdminOverview = createServerFn({ method: "POST" })
       { data: recentLogs },
     ] = await Promise.all([
       supabaseAdmin.from("users").select("*", { count: "exact", head: true }),
+      supabaseAdmin
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .gte("last_seen", fiveMinAgo),
       supabaseAdmin.from("deposits").select("*", { count: "exact", head: true }).eq("status", "pending"),
       supabaseAdmin
         .from("deposits")
@@ -55,6 +61,7 @@ export const getAdminOverview = createServerFn({ method: "POST" })
         .limit(20),
     ]);
 
+
     const settingsMap: Record<string, string | number | boolean | null> = {};
     (settings ?? []).forEach((s) => {
       settingsMap[s.key] = s.value as string | number | boolean | null;
@@ -64,6 +71,7 @@ export const getAdminOverview = createServerFn({ method: "POST" })
       role: admin!.role,
       stats: {
         totalUsers: totalUsers ?? 0,
+        onlineUsers: onlineUsers ?? 0,
         pendingDeposits: pendingDeposits ?? 0,
       },
       deposits: (recentDeposits ?? []).map((d) => ({
