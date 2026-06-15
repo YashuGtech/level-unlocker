@@ -479,7 +479,7 @@ export const finishGame = createServerFn({ method: "POST" })
     const LIFETIME_GAME_CAP = 30000;
     const basePrize = LEVEL_FLAT_REWARD_DEFAULT;
     const totalCoins = data.coinsCollected + settings.levelCoinBonus;
-    const coinsValueGtc = 0; // disabled — coins no longer convert to GTC
+    void settings.coinValueGtc; // retained for backward compat; coins are cosmetic
     let credited = basePrize + milestone;
 
     // Sum prior gameplay earnings (game_reward only — referrals are separate).
