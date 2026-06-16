@@ -184,6 +184,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           }
           setWebToken(null);
           setWebTokenState(null);
+          clearCachedSession();
           setState({ user: null, admin: null, settings: {}, announcements: [], lock: null });
         },
         signInWithWebToken: async (token: string) => {
