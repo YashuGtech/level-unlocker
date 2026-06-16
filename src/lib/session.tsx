@@ -118,13 +118,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const res = await bootstrapUser({ data: { initData: id } });
-      setState((prev) => ({
-        user: (res.user as SessionUser | null) ?? prev.user,
+      const next: SessionData = {
+        user: (res.user as SessionUser | null) ?? state.user,
         admin: res.admin,
         settings: res.settings,
         announcements: res.announcements as SessionData["announcements"],
         lock: (res as { lock?: SessionData["lock"] }).lock ?? null,
-      }));
+      };
+      setState(next);
+      if (next.user) writeCachedSession(next);
     } catch (e) {
       if (!opts.silent) {
         const msg = e instanceof Error ? e.message : "Failed to authenticate";
@@ -133,6 +135,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (id.startsWith("web:") && /expired|invalid|not found/i.test(msg)) {
           setWebToken(null);
           setWebTokenState(null);
+          clearCachedSession();
         }
       }
     } finally {
@@ -147,13 +150,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     if (effectiveInitData) {
-      void load(effectiveInitData);
+      // If we already hydrated from cache, refresh silently so the UI doesn't blank.
+      void load(effectiveInitData, { silent: Boolean(cached?.user) });
     } else if (devMode) {
       // No Telegram session and no web token → show /auth.
       setLoading(false);
+      clearCachedSession();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, effectiveInitData, devMode]);
+
 
   return (
     <Ctx.Provider
