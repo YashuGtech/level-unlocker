@@ -57,17 +57,48 @@ type SessionCtx = SessionData & {
 
 const Ctx = createContext<SessionCtx | null>(null);
 
+const SESSION_CACHE_KEY = "gtech_session_cache_v1";
+
+function readCachedSession(): SessionData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SESSION_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SessionData;
+  } catch {
+    return null;
+  }
+}
+function writeCachedSession(data: SessionData) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(data));
+  } catch {
+    /* quota — ignore */
+  }
+}
+function clearCachedSession() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSION_CACHE_KEY);
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { initData: tgInitData, ready, devMode } = useTelegramWebApp();
   const [webToken, setWebTokenState] = useState<string | null>(null);
-  const [state, setState] = useState<SessionData>({
-    user: null,
-    admin: null,
-    settings: {},
-    announcements: [],
-    lock: null,
-  });
-  const [loading, setLoading] = useState(true);
+  const cached = typeof window !== "undefined" ? readCachedSession() : null;
+  const [state, setState] = useState<SessionData>(
+    cached ?? {
+      user: null,
+      admin: null,
+      settings: {},
+      announcements: [],
+      lock: null,
+    },
+  );
+  // If we already have a cached user, render the app immediately and refresh
+  // in the background — this is the "ultra fast" login the user wants.
+  const [loading, setLoading] = useState(cached?.user ? false : true);
+
   const [error, setError] = useState<string | null>(null);
 
   // Resolve the auth credential to send to bootstrapUser.
