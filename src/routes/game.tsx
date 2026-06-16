@@ -71,6 +71,8 @@ type Stage =
       newLevel: number;
       levelCap: number;
       level: Level;
+      levelIndex: number;
+
     };
 
 type ReviveStatus = {
