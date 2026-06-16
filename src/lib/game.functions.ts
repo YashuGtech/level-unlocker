@@ -547,9 +547,20 @@ export const finishGame = createServerFn({ method: "POST" })
       note: noteParts.join(" • "),
     });
 
-    // 5% referral payout to the user's referrer (if any).
+    // 5% referral payout to the user's referrer (if any) — also capped at 100k total.
     if (latest?.referrer_id) {
-      const refShare = Math.round(credited * 0.05 * 100) / 100;
+      let refShare = Math.round(credited * 0.05 * 100) / 100;
+      const { data: refPrior } = await supabaseAdmin
+        .from("transactions")
+        .select("amount_gtc, kind")
+        .eq("user_id", latest.referrer_id)
+        .in("kind", ["game_reward", "referral_share", "referral_bonus", "level_skip"]);
+      const refTotal = (refPrior ?? []).reduce(
+        (s, r) => s + Math.max(0, Number(r.amount_gtc)),
+        0,
+      );
+      const refRemaining = Math.max(0, 100000 - refTotal);
+      if (refShare > refRemaining) refShare = refRemaining;
       if (refShare > 0) {
         const { data: refRow } = await supabaseAdmin
           .from("users")
@@ -578,6 +589,7 @@ export const finishGame = createServerFn({ method: "POST" })
         }
       }
     }
+
 
     return {
       ok: true as const,
