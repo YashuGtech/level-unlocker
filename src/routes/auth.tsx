@@ -42,15 +42,8 @@ declare global {
   }
 }
 
-const POST_LOGIN_URL = "https://gtcflappygame.com";
-
-function redirectAfterLogin() {
-  if (typeof window !== "undefined") {
-    window.location.replace(POST_LOGIN_URL);
-  }
-}
-
 const REDIRECT_SECONDS = 3;
+
 
 function AuthPage() {
   const { user, signInWithWebToken } = useSession();
