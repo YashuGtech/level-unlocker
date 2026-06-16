@@ -471,30 +471,42 @@ export const finishGame = createServerFn({ method: "POST" })
       latest?.current_level ?? (user as unknown as { current_level?: number }).current_level ?? 1,
     );
     const milestone = oldLevel === 50 || oldLevel === 100 ? MILESTONE_BONUS : 0;
-    // ── HARD EARNINGS CAP ──────────────────────────────────────────────
+    // ── HARD EARNINGS CAPS ─────────────────────────────────────────────
     // Players earn EXACTLY 200 GTC per level + milestone bonuses (5k at
-    // level 50, 5k at level 100). Coins collected are cosmetic only — they
-    // do NOT add GTC. Lifetime gameplay earnings are capped at 30,000 GTC
-    // (200 × 100 + 5000 + 5000). Referral earnings continue beyond that.
+    // level 50, 5k at level 100). Coins are cosmetic. Lifetime gameplay
+    // earnings are capped at 30,000 GTC. Total lifetime earnings
+    // (gameplay + referral) are capped at 100,000 GTC.
     const LIFETIME_GAME_CAP = 30000;
+    const LIFETIME_TOTAL_CAP = 100000;
     const basePrize = LEVEL_FLAT_REWARD_DEFAULT;
     const totalCoins = data.coinsCollected + settings.levelCoinBonus;
     void settings.coinValueGtc; // retained for backward compat; coins are cosmetic
     let credited = basePrize + milestone;
 
-    // Sum prior gameplay earnings (game_reward only — referrals are separate).
-    const { data: prior } = await supabaseAdmin
+    // Sum prior earnings.
+    const { data: priorGame } = await supabaseAdmin
       .from("transactions")
       .select("amount_gtc")
       .eq("user_id", user.telegram_id)
       .eq("kind", "game_reward");
-    const earnedSoFar = (prior ?? []).reduce((s, r) => s + Number(r.amount_gtc), 0);
-    const remainingCap = Math.max(0, LIFETIME_GAME_CAP - earnedSoFar);
-    if (credited > remainingCap) credited = remainingCap;
+    const earnedSoFar = (priorGame ?? []).reduce((s, r) => s + Number(r.amount_gtc), 0);
+    const remainingGameCap = Math.max(0, LIFETIME_GAME_CAP - earnedSoFar);
+    if (credited > remainingGameCap) credited = remainingGameCap;
+
+    // Total cap across game + referral earnings.
+    const { data: priorAll } = await supabaseAdmin
+      .from("transactions")
+      .select("amount_gtc, kind")
+      .eq("user_id", user.telegram_id)
+      .in("kind", ["game_reward", "referral_share", "referral_bonus", "level_skip"]);
+    const totalEarned = (priorAll ?? []).reduce((s, r) => s + Math.max(0, Number(r.amount_gtc)), 0);
+    const remainingTotalCap = Math.max(0, LIFETIME_TOTAL_CAP - totalEarned);
+    if (credited > remainingTotalCap) credited = remainingTotalCap;
 
     const newBal = Number(latest?.balance_gtc ?? 0) + credited;
     const newLevel = Math.min(settings.cap, oldLevel + 1);
     const completedCount = Number(latest?.levels_completed ?? 0) + 1;
+
     const newBonusRevives = Number(latest?.bonus_free_revives ?? 0) + settings.bonusRevivesPerWin;
 
     await supabaseAdmin
