@@ -57,17 +57,48 @@ type SessionCtx = SessionData & {
 
 const Ctx = createContext<SessionCtx | null>(null);
 
+const SESSION_CACHE_KEY = "gtech_session_cache_v1";
+
+function readCachedSession(): SessionData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SESSION_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SessionData;
+  } catch {
+    return null;
+  }
+}
+function writeCachedSession(data: SessionData) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(data));
+  } catch {
+    /* quota — ignore */
+  }
+}
+function clearCachedSession() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSION_CACHE_KEY);
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { initData: tgInitData, ready, devMode } = useTelegramWebApp();
   const [webToken, setWebTokenState] = useState<string | null>(null);
-  const [state, setState] = useState<SessionData>({
-    user: null,
-    admin: null,
-    settings: {},
-    announcements: [],
-    lock: null,
-  });
-  const [loading, setLoading] = useState(true);
+  const cached = typeof window !== "undefined" ? readCachedSession() : null;
+  const [state, setState] = useState<SessionData>(
+    cached ?? {
+      user: null,
+      admin: null,
+      settings: {},
+      announcements: [],
+      lock: null,
+    },
+  );
+  // If we already have a cached user, render the app immediately and refresh
+  // in the background — this is the "ultra fast" login the user wants.
+  const [loading, setLoading] = useState(cached?.user ? false : true);
+
   const [error, setError] = useState<string | null>(null);
 
   // Resolve the auth credential to send to bootstrapUser.
@@ -87,13 +118,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const res = await bootstrapUser({ data: { initData: id } });
-      setState((prev) => ({
-        user: (res.user as SessionUser | null) ?? prev.user,
+      const next: SessionData = {
+        user: (res.user as SessionUser | null) ?? state.user,
         admin: res.admin,
         settings: res.settings,
         announcements: res.announcements as SessionData["announcements"],
         lock: (res as { lock?: SessionData["lock"] }).lock ?? null,
-      }));
+      };
+      setState(next);
+      if (next.user) writeCachedSession(next);
     } catch (e) {
       if (!opts.silent) {
         const msg = e instanceof Error ? e.message : "Failed to authenticate";
@@ -102,6 +135,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (id.startsWith("web:") && /expired|invalid|not found/i.test(msg)) {
           setWebToken(null);
           setWebTokenState(null);
+          clearCachedSession();
         }
       }
     } finally {
@@ -116,13 +150,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     if (effectiveInitData) {
-      void load(effectiveInitData);
+      // If we already hydrated from cache, refresh silently so the UI doesn't blank.
+      void load(effectiveInitData, { silent: Boolean(cached?.user) });
     } else if (devMode) {
       // No Telegram session and no web token → show /auth.
       setLoading(false);
+      clearCachedSession();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, effectiveInitData, devMode]);
+
 
   return (
     <Ctx.Provider
@@ -147,6 +184,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           }
           setWebToken(null);
           setWebTokenState(null);
+          clearCachedSession();
           setState({ user: null, admin: null, settings: {}, announcements: [], lock: null });
         },
         signInWithWebToken: async (token: string) => {

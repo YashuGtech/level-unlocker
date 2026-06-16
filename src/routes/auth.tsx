@@ -42,24 +42,33 @@ declare global {
   }
 }
 
-const POST_LOGIN_URL = "https://gtcflappygame.com";
+const REDIRECT_SECONDS = 3;
 
-function redirectAfterLogin() {
-  if (typeof window !== "undefined") {
-    window.location.replace(POST_LOGIN_URL);
-  }
-}
 
 function AuthPage() {
   const { user, signInWithWebToken } = useSession();
   const navigate = useNavigate();
   const widgetHost = useRef<HTMLDivElement | null>(null);
   const [busy, setBusy] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
-  // Already signed in → bounce to the external game site.
+  // Countdown → redirect into the app.
   useEffect(() => {
-    if (user) redirectAfterLogin();
-  }, [user]);
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      void navigate({ to: "/" });
+      return;
+    }
+    const t = setTimeout(() => setCountdown((n) => (n ?? 1) - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown, navigate]);
+
+  // Already signed in (returning visit) → go straight to home.
+  useEffect(() => {
+    if (user && countdown === null) {
+      void navigate({ to: "/" });
+    }
+  }, [user, countdown, navigate]);
 
   // Mount Telegram Login Widget.
   useEffect(() => {
@@ -76,7 +85,7 @@ function AuthPage() {
         const r = await webLoginWidget({ data: { widgetData } });
         await signInWithWebToken(r.token);
         toast.success("Signed in with Telegram");
-        redirectAfterLogin();
+        setCountdown(REDIRECT_SECONDS);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Sign in failed");
       } finally {
@@ -113,14 +122,30 @@ function AuthPage() {
             progress and balance.
           </p>
 
-          <div className="mt-6 flex items-center justify-center" aria-busy={busy}>
-            <div ref={widgetHost} />
-          </div>
-
-          <p className="mt-4 text-[11px] text-muted-foreground">
-            Click the button above. Telegram will ask for your phone number and send a
-            Confirm / Decline message to your Telegram app to authorize the login.
-          </p>
+          {countdown !== null ? (
+            <div className="mt-6 space-y-3">
+              <div className="font-display text-5xl text-gradient-gold">{countdown}</div>
+              <p className="text-sm text-gold-soft">
+                Signed in! Redirecting to the app…
+              </p>
+              <button
+                onClick={() => void navigate({ to: "/" })}
+                className="w-full rounded-md bg-gradient-gold-flat px-4 py-2 text-sm font-semibold text-primary-foreground"
+              >
+                Go now
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="mt-6 flex items-center justify-center" aria-busy={busy}>
+                <div ref={widgetHost} />
+              </div>
+              <p className="mt-4 text-[11px] text-muted-foreground">
+                Click the button above. Telegram will ask for your phone number and send a
+                Confirm / Decline message to your Telegram app to authorize the login.
+              </p>
+            </>
+          )}
         </GoldFrame>
 
         <p className="mt-4 text-center text-[10px] text-muted-foreground">
@@ -133,3 +158,4 @@ function AuthPage() {
     </div>
   );
 }
+

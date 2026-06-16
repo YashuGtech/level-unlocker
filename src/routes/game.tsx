@@ -71,6 +71,8 @@ type Stage =
       newLevel: number;
       levelCap: number;
       level: Level;
+      levelIndex: number;
+
     };
 
 type ReviveStatus = {
@@ -225,6 +227,8 @@ function GameInner() {
                       newLevel: res.newLevel,
                       levelCap: res.levelCap,
                       level: lastLevel,
+                      levelIndex: stage.levelIndex,
+
                     });
                     await refresh();
                   }
@@ -570,7 +574,10 @@ function ResultScreen({
   credited,
   bonus,
   newBalance,
+  newLevel,
+  levelCap,
   level,
+  levelIndex,
   onHome,
 }: {
   completed: boolean;
@@ -581,9 +588,40 @@ function ResultScreen({
   newLevel: number;
   levelCap: number;
   level: Level;
+  levelIndex: number;
   onHome: () => void;
 }) {
+  void newLevel;
   const minutes = Math.max(1, Math.round(level.duration_seconds / 60));
+  const allLevelsDone = completed && levelIndex >= levelCap;
+
+  if (allLevelsDone) {
+    return (
+      <div className="relative min-h-[calc(100dvh-80px)] overflow-hidden flex items-center justify-center px-5">
+        <GoldFrame glow className="w-full max-w-sm p-6 text-center space-y-4">
+          <div className="text-6xl">👑</div>
+          <h1 className="font-display text-3xl text-gradient-gold">All 100 Levels Complete!</h1>
+          <p className="text-sm text-gold-soft">
+            You have completed the maximum of 100 levels. Thank you for playing!
+          </p>
+          <div className="rounded-lg border border-gold-soft/40 bg-black/40 p-3 text-xs text-muted-foreground">
+            Please wait for the withdrawal announcement. We will notify you once withdrawals are available.
+          </div>
+          {credited > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              Final reward: +{credited} GTC · Balance {newBalance.toFixed(0)} GTC
+            </p>
+          )}
+          <button
+            onClick={onHome}
+            className="w-full rounded-lg border border-gold-soft/40 bg-black/40 px-6 py-2.5 text-sm font-semibold uppercase tracking-widest text-gold-soft"
+          >
+            Back to home
+          </button>
+        </GoldFrame>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-[calc(100dvh-80px)] overflow-hidden">
@@ -648,3 +686,4 @@ function ResultScreen({
     </div>
   );
 }
+
