@@ -227,6 +227,8 @@ function GameInner() {
                       newLevel: res.newLevel,
                       levelCap: res.levelCap,
                       level: lastLevel,
+                      levelIndex: stage.levelIndex,
+
                     });
                     await refresh();
                   }
