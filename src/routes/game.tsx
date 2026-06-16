@@ -577,6 +577,7 @@ function ResultScreen({
   newLevel,
   levelCap,
   level,
+  levelIndex,
   onHome,
 }: {
   completed: boolean;
@@ -587,8 +588,10 @@ function ResultScreen({
   newLevel: number;
   levelCap: number;
   level: Level;
+  levelIndex: number;
   onHome: () => void;
 }) {
+  void newLevel;
   const minutes = Math.max(1, Math.round(level.duration_seconds / 60));
   const allLevelsDone = completed && levelIndex >= levelCap;
 
