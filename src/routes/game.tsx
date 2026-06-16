@@ -590,7 +590,7 @@ function ResultScreen({
   onHome: () => void;
 }) {
   const minutes = Math.max(1, Math.round(level.duration_seconds / 60));
-  const allLevelsDone = completed && newLevel >= levelCap && level.level_index >= levelCap;
+  const allLevelsDone = completed && levelIndex >= levelCap;
 
   if (allLevelsDone) {
     return (
